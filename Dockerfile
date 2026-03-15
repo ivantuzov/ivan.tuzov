@@ -1,13 +1,7 @@
-FROM runpod/base:0.6.2-cuda12.2.0
+FROM vllm/vllm-openai:latest
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install vLLM with CUDA support
-RUN pip install --no-cache-dir \
-    vllm>=0.9.0 \
-    runpod \
-    huggingface_hub \
-    && pip cache purge
+# vLLM image already has vllm, torch, CUDA — just add runpod
+RUN pip install --no-cache-dir runpod
 
 # Copy handler
 COPY handler.py /handler.py
