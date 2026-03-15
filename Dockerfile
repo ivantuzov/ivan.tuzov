@@ -1,10 +1,8 @@
-FROM runpod/base:0.6.2-cuda12.2.0
+FROM runpod/worker-v1-vllm:v2.14.0
 
-RUN pip install --no-cache-dir \
-    vllm \
-    runpod \
-    && pip cache purge \
-    && rm -rf /root/.cache /tmp/*
+# This image already has vllm + runpod + CUDA
+# Just upgrade vllm to latest for Qwen3.5 support
+RUN pip install --no-cache-dir --upgrade vllm && rm -rf /root/.cache /tmp/*
 
 COPY handler.py /handler.py
 
