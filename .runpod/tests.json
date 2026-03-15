@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "name": "chat_completion",
+      "input": {
+        "openai_route": "/v1/chat/completions",
+        "openai_input": {
+          "model": "Qwen/Qwen3.5-27B-GPTQ-Int4",
+          "messages": [{"role": "user", "content": "Say hello in one word"}],
+          "max_tokens": 20,
+          "temperature": 0.7
+        }
+      },
+      "timeout": 30000
+    },
+    {
+      "name": "raw_completion",
+      "input": {
+        "prompt": "Hello, my name is",
+        "max_tokens": 20
+      },
+      "timeout": 30000
+    }
+  ],
+  "config": {
+    "gpuTypeId": "NVIDIA L40S",
+    "gpuCount": 1,
+    "env": [
+      {
+        "key": "MODEL_NAME",
+        "value": "Qwen/Qwen3.5-27B-GPTQ-Int4"
+      },
+      {
+        "key": "QUANTIZATION",
+        "value": "gptq"
+      },
+      {
+        "key": "MAX_MODEL_LEN",
+        "value": "8192"
+      },
+      {
+        "key": "HF_TOKEN",
+        "value": "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"
+      }
+    ],
+    "allowedCudaVersions": ["12.9", "12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2"]
+  }
+}

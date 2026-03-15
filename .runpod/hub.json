@@ -1,0 +1,99 @@
+{
+  "title": "vLLM Qwen3.5",
+  "description": "vLLM serverless worker supporting Qwen3.5 and other latest models",
+  "type": "serverless",
+  "category": "language",
+  "iconUrl": "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/dark/vllm-color.png",
+  "config": {
+    "runsOn": "GPU",
+    "containerDiskInGb": 150,
+    "gpuCount": 1,
+    "allowedCudaVersions": ["12.9", "12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2"],
+    "presets": [
+      {
+        "name": "Qwen3.5-27B-GPTQ-Int4",
+        "defaults": {
+          "MODEL_NAME": "Qwen/Qwen3.5-27B-GPTQ-Int4",
+          "QUANTIZATION": "gptq",
+          "MAX_MODEL_LEN": "8192"
+        }
+      },
+      {
+        "name": "Qwen3.5-27B (FP16)",
+        "defaults": {
+          "MODEL_NAME": "Qwen/Qwen3.5-27B",
+          "MAX_MODEL_LEN": "4096"
+        }
+      }
+    ],
+    "env": [
+      {
+        "key": "MODEL_NAME",
+        "input": {
+          "name": "Model",
+          "type": "string",
+          "description": "HuggingFace model name",
+          "required": true,
+          "default": "Qwen/Qwen3.5-27B-GPTQ-Int4"
+        }
+      },
+      {
+        "key": "MAX_MODEL_LEN",
+        "input": {
+          "name": "Max Context Length",
+          "type": "string",
+          "description": "Maximum context length",
+          "default": "8192"
+        }
+      },
+      {
+        "key": "QUANTIZATION",
+        "input": {
+          "name": "Quantization",
+          "type": "string",
+          "description": "Quantization method (gptq, awq, or empty for none)",
+          "default": "gptq"
+        }
+      },
+      {
+        "key": "GPU_MEMORY_UTILIZATION",
+        "input": {
+          "name": "GPU Memory Utilization",
+          "type": "string",
+          "description": "GPU VRAM utilization (0.0-1.0)",
+          "default": "0.92",
+          "advanced": true
+        }
+      },
+      {
+        "key": "HF_TOKEN",
+        "input": {
+          "name": "HuggingFace Token",
+          "type": "string",
+          "description": "HuggingFace token for gated models",
+          "advanced": true
+        }
+      },
+      {
+        "key": "DTYPE",
+        "input": {
+          "name": "Data Type",
+          "type": "string",
+          "description": "Data type (auto, half, bfloat16, float16)",
+          "default": "auto",
+          "advanced": true
+        }
+      },
+      {
+        "key": "TRUST_REMOTE_CODE",
+        "input": {
+          "name": "Trust Remote Code",
+          "type": "string",
+          "description": "Trust remote code from HuggingFace (1 or 0)",
+          "default": "1",
+          "advanced": true
+        }
+      }
+    ]
+  }
+}
