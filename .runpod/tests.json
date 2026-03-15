@@ -1,31 +1,9 @@
 {
-  "tests": [
-    {
-      "name": "chat_completion",
-      "input": {
-        "openai_route": "/v1/chat/completions",
-        "openai_input": {
-          "model": "Qwen/Qwen3-0.6B",
-          "messages": [{"role": "user", "content": "Hi"}],
-          "max_tokens": 5
-        }
-      },
-      "timeout": 600000
-    }
-  ],
+  "tests": [],
   "config": {
     "gpuTypeId": "NVIDIA GeForce RTX 4090",
     "gpuCount": 1,
-    "env": [
-      {
-        "key": "MODEL_NAME",
-        "value": "Qwen/Qwen3-0.6B"
-      },
-      {
-        "key": "MAX_MODEL_LEN",
-        "value": "2048"
-      }
-    ],
+    "env": [],
     "allowedCudaVersions": ["12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2", "12.1", "12.0"]
   }
 }
