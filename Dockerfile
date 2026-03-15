@@ -6,5 +6,6 @@ RUN pip install --no-cache-dir runpod
 # Copy handler
 COPY handler.py /handler.py
 
-# RunPod serverless entrypoint
+# Override vllm entrypoint
+ENTRYPOINT []
 CMD ["python", "-u", "/handler.py"]
