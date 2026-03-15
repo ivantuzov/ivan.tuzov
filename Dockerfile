@@ -1,11 +1,13 @@
-FROM vllm/vllm-openai:latest
+FROM runpod/base:0.6.2-cuda12.2.0
 
-# vLLM image already has vllm, torch, CUDA — just add runpod
-RUN pip install --no-cache-dir runpod
+# Install vLLM with pre-built wheel (no compilation)
+RUN pip install --no-cache-dir \
+    vllm \
+    runpod \
+    && pip cache purge \
+    && rm -rf /root/.cache /tmp/*
 
-# Copy handler
 COPY handler.py /handler.py
 
-# Override vllm entrypoint
 ENTRYPOINT []
 CMD ["python", "-u", "/handler.py"]
