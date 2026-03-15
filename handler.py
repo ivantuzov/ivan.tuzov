@@ -1,12 +1,11 @@
 """
 RunPod Serverless Handler for vLLM with OpenAI-compatible API.
-Supports Qwen3.5 and other models via latest vLLM.
+Supports Qwen3.5 and other models via transformers fallback.
 """
 
 import os
 import runpod
 from vllm import LLM, SamplingParams
-from vllm.entrypoints.chat_utils import apply_chat_template
 
 # Load model on cold start
 MODEL_NAME = os.environ.get("MODEL_NAME", "Qwen/Qwen3.5-27B-GPTQ-Int4")
@@ -31,9 +30,20 @@ llm_kwargs = dict(
 if QUANTIZATION and QUANTIZATION.lower() not in ("none", ""):
     llm_kwargs["quantization"] = QUANTIZATION.lower()
 
-llm = LLM(**llm_kwargs)
-tokenizer = llm.get_tokenizer()
+# Try native vLLM first, fall back to transformers backend for unsupported architectures
+try:
+    llm = LLM(**llm_kwargs)
+    print("[Handler] Model loaded with native vLLM backend")
+except ValueError as e:
+    if "not supported" in str(e):
+        print(f"[Handler] Native vLLM doesn't support this model, using transformers backend...")
+        llm_kwargs["model_impl"] = "transformers"
+        llm = LLM(**llm_kwargs)
+        print("[Handler] Model loaded with transformers backend")
+    else:
+        raise
 
+tokenizer = llm.get_tokenizer()
 print(f"[Handler] Model loaded successfully!")
 
 
@@ -42,7 +52,6 @@ def handler(job):
     job_input = job["input"]
 
     # Support OpenAI-compatible format
-    openai_route = job_input.get("openai_route", "")
     openai_input = job_input.get("openai_input", None)
 
     if openai_input or "messages" in job_input:
@@ -96,7 +105,6 @@ def handler(job):
         }
 
     elif "prompt" in job_input:
-        # Raw completion mode
         prompt = job_input["prompt"]
         max_tokens = job_input.get("max_tokens", 512)
         temperature = job_input.get("temperature", 0.7)
