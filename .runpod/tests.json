@@ -1,9 +1,26 @@
 {
-  "tests": [],
+  "tests": [
+    {
+      "name": "ping",
+      "input": {
+        "ping": true
+      },
+      "timeout": 30000
+    }
+  ],
   "config": {
     "gpuTypeId": "NVIDIA GeForce RTX 4090",
     "gpuCount": 1,
-    "env": [],
+    "env": [
+      {
+        "key": "MODEL_NAME",
+        "value": "Qwen/Qwen3-0.6B"
+      },
+      {
+        "key": "MAX_MODEL_LEN",
+        "value": "512"
+      }
+    ],
     "allowedCudaVersions": ["12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2", "12.1", "12.0"]
   }
 }

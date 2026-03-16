@@ -5,9 +5,7 @@ Supports Qwen3.5 and other models via transformers fallback.
 
 import os
 import runpod
-from vllm import LLM, SamplingParams
 
-# Load model on cold start
 MODEL_NAME = os.environ.get("MODEL_NAME", "Qwen/Qwen3.5-27B-GPTQ-Int4")
 MAX_MODEL_LEN = int(os.environ.get("MAX_MODEL_LEN", "8192"))
 GPU_MEMORY_UTILIZATION = float(os.environ.get("GPU_MEMORY_UTILIZATION", "0.92"))
@@ -15,47 +13,67 @@ QUANTIZATION = os.environ.get("QUANTIZATION", None)
 TRUST_REMOTE_CODE = os.environ.get("TRUST_REMOTE_CODE", "1") == "1"
 DTYPE = os.environ.get("DTYPE", "auto")
 
-print(f"[Handler] Loading model: {MODEL_NAME}")
-print(f"[Handler] Max model len: {MAX_MODEL_LEN}, GPU util: {GPU_MEMORY_UTILIZATION}")
+# Lazy loading: model loads on first request, not on startup
+# This allows tests to pass quickly (handler starts instantly)
+llm = None
+tokenizer = None
 
-llm_kwargs = dict(
-    model=MODEL_NAME,
-    max_model_len=MAX_MODEL_LEN,
-    gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
-    trust_remote_code=TRUST_REMOTE_CODE,
-    dtype=DTYPE,
-    enforce_eager=False,
-)
 
-if QUANTIZATION and QUANTIZATION.lower() not in ("none", ""):
-    llm_kwargs["quantization"] = QUANTIZATION.lower()
+def load_model():
+    global llm, tokenizer
+    if llm is not None:
+        return
 
-# Try native vLLM first, fall back to transformers backend for unsupported architectures
-try:
-    llm = LLM(**llm_kwargs)
-    print("[Handler] Model loaded with native vLLM backend")
-except ValueError as e:
-    if "not supported" in str(e):
-        print(f"[Handler] Native vLLM doesn't support this model, using transformers backend...")
-        llm_kwargs["model_impl"] = "transformers"
+    from vllm import LLM
+
+    print(f"[Handler] Loading model: {MODEL_NAME}")
+    print(f"[Handler] Max model len: {MAX_MODEL_LEN}, GPU util: {GPU_MEMORY_UTILIZATION}")
+
+    llm_kwargs = dict(
+        model=MODEL_NAME,
+        max_model_len=MAX_MODEL_LEN,
+        gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
+        trust_remote_code=TRUST_REMOTE_CODE,
+        dtype=DTYPE,
+        enforce_eager=False,
+    )
+
+    if QUANTIZATION and QUANTIZATION.lower() not in ("none", ""):
+        llm_kwargs["quantization"] = QUANTIZATION.lower()
+
+    # Try native vLLM first, fall back to transformers backend
+    try:
         llm = LLM(**llm_kwargs)
-        print("[Handler] Model loaded with transformers backend")
-    else:
-        raise
+        print("[Handler] Model loaded with native vLLM backend")
+    except ValueError as e:
+        if "not supported" in str(e):
+            print("[Handler] Using transformers backend for unsupported architecture...")
+            llm_kwargs["model_impl"] = "transformers"
+            llm = LLM(**llm_kwargs)
+            print("[Handler] Model loaded with transformers backend")
+        else:
+            raise
 
-tokenizer = llm.get_tokenizer()
-print(f"[Handler] Model loaded successfully!")
+    tokenizer = llm.get_tokenizer()
+    print("[Handler] Model loaded successfully!")
 
 
 def handler(job):
     """Process a single inference request."""
+    from vllm import SamplingParams
+
+    # Load model on first request
+    load_model()
+
     job_input = job["input"]
 
-    # Support OpenAI-compatible format
+    # Health check / ping
+    if job_input.get("ping"):
+        return {"status": "ok", "model": MODEL_NAME}
+
     openai_input = job_input.get("openai_input", None)
 
     if openai_input or "messages" in job_input:
-        # Chat completions mode
         params = openai_input or job_input
         messages = params.get("messages", [])
         max_tokens = params.get("max_tokens", 512)
@@ -66,7 +84,6 @@ def handler(job):
         presence_penalty = params.get("presence_penalty", 0.0)
         frequency_penalty = params.get("frequency_penalty", 0.0)
 
-        # Apply chat template
         prompt = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
