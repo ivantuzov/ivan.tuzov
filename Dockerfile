@@ -6,4 +6,4 @@ RUN pip install --no-cache-dir --upgrade transformers huggingface_hub && rm -rf 
 COPY handler.py /handler.py
 
 ENTRYPOINT []
-CMD ["python", "-u", "/handler.py"]
+CMD ["python3", "-u", "/handler.py"]
