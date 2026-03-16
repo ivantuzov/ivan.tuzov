@@ -6,12 +6,12 @@ Supports Qwen3.5 and other models via transformers fallback.
 import os
 import runpod
 
-MODEL_NAME = os.environ.get("MODEL_NAME", "Qwen/Qwen3.5-27B-GPTQ-Int4")
-MAX_MODEL_LEN = int(os.environ.get("MAX_MODEL_LEN", "8192"))
-GPU_MEMORY_UTILIZATION = float(os.environ.get("GPU_MEMORY_UTILIZATION", "0.92"))
-QUANTIZATION = os.environ.get("QUANTIZATION", None)
-TRUST_REMOTE_CODE = os.environ.get("TRUST_REMOTE_CODE", "1") == "1"
-DTYPE = os.environ.get("DTYPE", "auto")
+MODEL_NAME = os.environ.get("MODEL_NAME", "") or "Qwen/Qwen3.5-27B-GPTQ-Int4"
+MAX_MODEL_LEN = int(os.environ.get("MAX_MODEL_LEN", "") or "8192")
+GPU_MEMORY_UTILIZATION = float(os.environ.get("GPU_MEMORY_UTILIZATION", "") or "0.92")
+QUANTIZATION = os.environ.get("QUANTIZATION", "") or None
+TRUST_REMOTE_CODE = (os.environ.get("TRUST_REMOTE_CODE", "") or "1") == "1"
+DTYPE = os.environ.get("DTYPE", "") or "auto"
 
 # Lazy loading: model loads on first request, not on startup
 # This allows tests to pass quickly (handler starts instantly)
