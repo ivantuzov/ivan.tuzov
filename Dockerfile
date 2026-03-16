@@ -1,4 +1,4 @@
-FROM runpod/worker-v1-vllm:v2.8.0stable-cuda12.1.0
+FROM runpod/worker-v1-vllm:v2.14.0
 
 COPY handler.py /handler.py
 

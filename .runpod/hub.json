@@ -8,15 +8,19 @@
     "runsOn": "GPU",
     "containerDiskInGb": 150,
     "gpuCount": 1,
-    "allowedCudaVersions": ["12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2", "12.1", "12.0"],
+    "allowedCudaVersions": ["12.9", "12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2"],
     "env": [
       {
         "key": "MODEL_NAME",
-        "value": "Qwen/Qwen3.5-27B"
+        "value": "Qwen/Qwen3.5-27B-GPTQ-Int4"
       },
       {
         "key": "MAX_MODEL_LEN",
-        "value": "4096"
+        "value": "8192"
+      },
+      {
+        "key": "QUANTIZATION",
+        "value": "gptq"
       },
       {
         "key": "GPU_MEMORY_UTILIZATION",
@@ -25,10 +29,6 @@
       {
         "key": "TRUST_REMOTE_CODE",
         "value": "1"
-      },
-      {
-        "key": "HF_TOKEN",
-        "value": "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"
       },
       {
         "key": "DTYPE",
