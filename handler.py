@@ -60,16 +60,16 @@ def load_model():
 
 def handler(job):
     """Process a single inference request."""
-    from vllm import SamplingParams
-
-    # Load model on first request
-    load_model()
-
     job_input = job["input"]
 
-    # Health check / ping
+    # Health check / ping — instant response, no model loading
     if job_input.get("ping"):
         return {"status": "ok", "model": MODEL_NAME}
+
+    from vllm import SamplingParams
+
+    # Load model on first real request
+    load_model()
 
     openai_input = job_input.get("openai_input", None)
 
