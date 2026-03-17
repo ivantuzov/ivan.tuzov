@@ -11,7 +11,7 @@ from huggingface_hub import hf_hub_download
 MODEL_REPO = os.environ.get("MODEL_REPO", "mradermacher/Huihui-Qwen3.5-27B-abliterated-GGUF")
 MODEL_FILE = os.environ.get("MODEL_FILE", "Huihui-Qwen3.5-27B-abliterated.Q4_K_M.gguf")
 MODEL_DIR = os.environ.get("MODEL_DIR", "/runpod-volume/models")
-CTX_SIZE = int(os.environ.get("CTX_SIZE", "8192"))
+CTX_SIZE = int(os.environ.get("CTX_SIZE", "32768"))
 GPU_LAYERS = int(os.environ.get("GPU_LAYERS", "99"))
 PORT = 8080
 
@@ -71,7 +71,7 @@ def handler(job):
 
     # Health check
     if job_input.get("ping"):
-        return {"status": "ok", "model": MODEL_FILE}
+        return {"status": "ok", "model": MODEL_FILE, "ctx_size": CTX_SIZE}
 
     # Forward to llama-server OpenAI API
     messages = job_input.get("messages", [])
@@ -91,29 +91,53 @@ def handler(job):
         "temperature": job_input.get("temperature") or job_input.get("openai_input", {}).get("temperature", 0.7),
     }
 
+    # Log request size
+    total_chars = sum(len(m.get("content", "")) for m in messages)
+    print(f"[Handler] Request: {len(messages)} messages, {total_chars} chars, max_tokens={body['max_tokens']}")
+
     try:
         r = requests.post(f"http://localhost:{PORT}/v1/chat/completions", json=body, timeout=300)
+        print(f"[Handler] llama-server HTTP {r.status_code}, response len={len(r.text)}")
+
+        # Check for HTTP errors
+        if r.status_code != 200:
+            error_text = r.text[:500]
+            print(f"[Handler] llama-server ERROR: {error_text}")
+            return {"error": f"llama-server HTTP {r.status_code}: {error_text}"}
+
         data = r.json()
+
+        # Check for error in response
+        if "error" in data:
+            print(f"[Handler] llama-server error: {data['error']}")
+            return {"error": f"llama-server: {data['error']}"}
 
         # Pass through raw response - let client handle parsing
         msg = data.get("choices", [{}])[0].get("message", {})
         content = msg.get("content", "")
         reasoning = msg.get("reasoning_content", "")
 
+        print(f"[Handler] Response: content={len(content)} chars, reasoning={len(reasoning)} chars, usage={data.get('usage', {})}")
+
+        result_msg = {"role": "assistant", "content": content}
+        if reasoning:
+            result_msg["reasoning_content"] = reasoning
+
         return {
             "choices": [{
-                "message": {"role": "assistant", "content": content},
+                "message": result_msg,
                 "finish_reason": data.get("choices", [{}])[0].get("finish_reason", "stop"),
             }],
             "usage": data.get("usage", {}),
             "model": MODEL_FILE,
         }
     except Exception as e:
+        print(f"[Handler] Exception: {e}")
         return {"error": str(e)}
 
 
 # Start server on cold start
-print("[Handler] Initializing...")
+print(f"[Handler] Initializing... CTX_SIZE={CTX_SIZE}")
 start_server()
 
 runpod.serverless.start({"handler": handler})
