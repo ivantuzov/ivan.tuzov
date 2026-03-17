@@ -95,18 +95,10 @@ def handler(job):
         r = requests.post(f"http://localhost:{PORT}/v1/chat/completions", json=body, timeout=300)
         data = r.json()
 
-        # Extract clean answer
+        # Pass through raw response - let client handle parsing
         msg = data.get("choices", [{}])[0].get("message", {})
         content = msg.get("content", "")
         reasoning = msg.get("reasoning_content", "")
-
-        # If content empty, try reasoning
-        if not content.strip() and reasoning:
-            full = reasoning
-            if "</think>" in full:
-                content = full.split("</think>")[-1].strip()
-            else:
-                content = reasoning
 
         return {
             "choices": [{
