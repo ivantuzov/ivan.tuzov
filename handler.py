@@ -1,143 +1,127 @@
 """
-RunPod Serverless Handler for vLLM with OpenAI-compatible API.
-Supports Qwen3.5 and other models via transformers fallback.
+RunPod Serverless Handler for llama.cpp with Qwen3.5.
 """
-
 import os
+import subprocess
+import time
+import requests
 import runpod
+from huggingface_hub import hf_hub_download
 
-MODEL_NAME = os.environ.get("MODEL_NAME", "") or "Qwen/Qwen3.5-27B-GPTQ-Int4"
-MAX_MODEL_LEN = int(os.environ.get("MAX_MODEL_LEN", "") or "8192")
-GPU_MEMORY_UTILIZATION = float(os.environ.get("GPU_MEMORY_UTILIZATION", "") or "0.92")
-QUANTIZATION = os.environ.get("QUANTIZATION", "") or None
-TRUST_REMOTE_CODE = (os.environ.get("TRUST_REMOTE_CODE", "") or "1") == "1"
-DTYPE = os.environ.get("DTYPE", "") or "auto"
+MODEL_REPO = os.environ.get("MODEL_REPO", "mradermacher/Huihui-Qwen3.5-27B-abliterated-GGUF")
+MODEL_FILE = os.environ.get("MODEL_FILE", "Huihui-Qwen3.5-27B-abliterated.Q4_K_M.gguf")
+MODEL_DIR = os.environ.get("MODEL_DIR", "/runpod-volume/models")
+CTX_SIZE = int(os.environ.get("CTX_SIZE", "8192"))
+GPU_LAYERS = int(os.environ.get("GPU_LAYERS", "99"))
+PORT = 8080
 
-# Lazy loading: model loads on first request, not on startup
-# This allows tests to pass quickly (handler starts instantly)
-llm = None
-tokenizer = None
+server_process = None
+server_ready = False
 
 
-def load_model():
-    global llm, tokenizer
-    if llm is not None:
-        return
+def ensure_model():
+    """Download model if not present."""
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    model_path = os.path.join(MODEL_DIR, MODEL_FILE)
+    if not os.path.exists(model_path):
+        print(f"[Handler] Downloading {MODEL_REPO}/{MODEL_FILE}...")
+        hf_hub_download(MODEL_REPO, MODEL_FILE, local_dir=MODEL_DIR)
+        print(f"[Handler] Download complete: {model_path}")
+    return model_path
 
-    from vllm import LLM
 
-    print(f"[Handler] Loading model: {MODEL_NAME}")
-    print(f"[Handler] Max model len: {MAX_MODEL_LEN}, GPU util: {GPU_MEMORY_UTILIZATION}")
+def start_server():
+    """Start llama-server."""
+    global server_process, server_ready
+    model_path = ensure_model()
 
-    llm_kwargs = dict(
-        model=MODEL_NAME,
-        max_model_len=MAX_MODEL_LEN,
-        gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
-        trust_remote_code=TRUST_REMOTE_CODE,
-        dtype=DTYPE,
-        enforce_eager=False,
-    )
+    print(f"[Handler] Starting llama-server: {MODEL_FILE}, ctx={CTX_SIZE}, gpu_layers={GPU_LAYERS}")
+    server_process = subprocess.Popen([
+        "llama-server",
+        "--model", model_path,
+        "--host", "0.0.0.0",
+        "--port", str(PORT),
+        "--n-gpu-layers", str(GPU_LAYERS),
+        "--ctx-size", str(CTX_SIZE),
+    ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    if QUANTIZATION and QUANTIZATION.lower() not in ("none", ""):
-        llm_kwargs["quantization"] = QUANTIZATION.lower()
-
-    # Try native vLLM first, fall back to transformers backend
-    try:
-        llm = LLM(**llm_kwargs)
-        print("[Handler] Model loaded with native vLLM backend")
-    except ValueError as e:
-        if "not supported" in str(e):
-            print("[Handler] Using transformers backend for unsupported architecture...")
-            llm_kwargs["model_impl"] = "transformers"
-            llm = LLM(**llm_kwargs)
-            print("[Handler] Model loaded with transformers backend")
-        else:
-            raise
-
-    tokenizer = llm.get_tokenizer()
-    print("[Handler] Model loaded successfully!")
+    # Wait for server to be ready
+    for i in range(120):
+        try:
+            r = requests.get(f"http://localhost:{PORT}/health", timeout=2)
+            if r.status_code == 200:
+                server_ready = True
+                print(f"[Handler] Server ready after {i+1}s")
+                return
+        except:
+            pass
+        time.sleep(1)
+    print("[Handler] Server failed to start in 120s")
 
 
 def handler(job):
-    """Process a single inference request."""
+    """Process inference request."""
+    global server_ready
+    if not server_ready:
+        start_server()
+        if not server_ready:
+            return {"error": "Server failed to start"}
+
     job_input = job["input"]
 
-    # Health check / ping — instant response, no model loading
+    # Health check
     if job_input.get("ping"):
-        return {"status": "ok", "model": MODEL_NAME}
+        return {"status": "ok", "model": MODEL_FILE}
 
-    from vllm import SamplingParams
-
-    # Load model on first real request
-    load_model()
-
-    openai_input = job_input.get("openai_input", None)
-
-    if openai_input or "messages" in job_input:
-        params = openai_input or job_input
+    # Forward to llama-server OpenAI API
+    messages = job_input.get("messages", [])
+    if not messages and job_input.get("openai_input"):
+        params = job_input["openai_input"]
         messages = params.get("messages", [])
-        max_tokens = params.get("max_tokens", 512)
-        temperature = params.get("temperature", 0.7)
-        top_p = params.get("top_p", 0.9)
-        top_k = params.get("top_k", -1)
-        stop = params.get("stop", None)
-        presence_penalty = params.get("presence_penalty", 0.0)
-        frequency_penalty = params.get("frequency_penalty", 0.0)
+    elif not messages and job_input.get("prompt"):
+        messages = [{"role": "user", "content": job_input["prompt"]}]
 
-        prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+    if not messages:
+        return {"error": "No messages provided"}
 
-        sampling_params = SamplingParams(
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k if top_k > 0 else -1,
-            stop=stop,
-            presence_penalty=presence_penalty,
-            frequency_penalty=frequency_penalty,
-        )
+    body = {
+        "model": MODEL_FILE,
+        "messages": messages,
+        "max_tokens": job_input.get("max_tokens") or job_input.get("openai_input", {}).get("max_tokens", 2000),
+        "temperature": job_input.get("temperature") or job_input.get("openai_input", {}).get("temperature", 0.7),
+    }
 
-        outputs = llm.generate([prompt], sampling_params)
-        generated_text = outputs[0].outputs[0].text
-        usage = {
-            "prompt_tokens": len(outputs[0].prompt_token_ids),
-            "completion_tokens": len(outputs[0].outputs[0].token_ids),
-            "total_tokens": len(outputs[0].prompt_token_ids) + len(outputs[0].outputs[0].token_ids),
-        }
+    try:
+        r = requests.post(f"http://localhost:{PORT}/v1/chat/completions", json=body, timeout=300)
+        data = r.json()
+
+        # Extract clean answer
+        msg = data.get("choices", [{}])[0].get("message", {})
+        content = msg.get("content", "")
+        reasoning = msg.get("reasoning_content", "")
+
+        # If content empty, try reasoning
+        if not content.strip() and reasoning:
+            full = reasoning
+            if "</think>" in full:
+                content = full.split("</think>")[-1].strip()
+            else:
+                content = reasoning
 
         return {
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": generated_text,
-                    },
-                    "finish_reason": outputs[0].outputs[0].finish_reason,
-                }
-            ],
-            "usage": usage,
-            "model": MODEL_NAME,
+            "choices": [{
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": data.get("choices", [{}])[0].get("finish_reason", "stop"),
+            }],
+            "usage": data.get("usage", {}),
+            "model": MODEL_FILE,
         }
+    except Exception as e:
+        return {"error": str(e)}
 
-    elif "prompt" in job_input:
-        prompt = job_input["prompt"]
-        max_tokens = job_input.get("max_tokens", 512)
-        temperature = job_input.get("temperature", 0.7)
 
-        sampling_params = SamplingParams(
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-
-        outputs = llm.generate([prompt], sampling_params)
-        generated_text = outputs[0].outputs[0].text
-
-        return {"text": generated_text, "model": MODEL_NAME}
-
-    else:
-        return {"error": "Provide 'messages' (chat) or 'prompt' (completion)"}
-
+# Start server on cold start
+print("[Handler] Initializing...")
+start_server()
 
 runpod.serverless.start({"handler": handler})

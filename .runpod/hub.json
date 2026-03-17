@@ -1,38 +1,29 @@
 {
-  "title": "vLLM Qwen3.5",
-  "description": "vLLM serverless worker supporting Qwen3.5 and other latest models",
+  "title": "llama.cpp Qwen3.5-27B",
+  "description": "llama.cpp serverless worker with Qwen3.5-27B abliterated GGUF",
   "type": "serverless",
   "category": "language",
-  "iconUrl": "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/dark/vllm-color.png",
   "config": {
     "runsOn": "GPU",
-    "containerDiskInGb": 150,
+    "containerDiskInGb": 50,
     "gpuCount": 1,
-    "allowedCudaVersions": ["12.9", "12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2"],
+    "allowedCudaVersions": ["12.8", "12.7", "12.6", "12.5", "12.4", "12.3", "12.2", "12.1"],
     "env": [
       {
-        "key": "MODEL_NAME",
-        "value": "Qwen/Qwen3.5-27B-GPTQ-Int4"
+        "key": "MODEL_REPO",
+        "value": "mradermacher/Huihui-Qwen3.5-27B-abliterated-GGUF"
       },
       {
-        "key": "MAX_MODEL_LEN",
+        "key": "MODEL_FILE",
+        "value": "Huihui-Qwen3.5-27B-abliterated.Q4_K_M.gguf"
+      },
+      {
+        "key": "CTX_SIZE",
         "value": "8192"
       },
       {
-        "key": "QUANTIZATION",
-        "value": "gptq"
-      },
-      {
-        "key": "GPU_MEMORY_UTILIZATION",
-        "value": "0.92"
-      },
-      {
-        "key": "TRUST_REMOTE_CODE",
-        "value": "1"
-      },
-      {
-        "key": "DTYPE",
-        "value": "auto"
+        "key": "GPU_LAYERS",
+        "value": "99"
       }
     ]
   }
